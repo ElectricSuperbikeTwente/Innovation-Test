@@ -17,7 +17,7 @@ first_gear_ratio = 1.5
 second_gear_ratio = 1.5
 rear_chain_ratio = 3.79/1.5
 transmission_efficiency_gearbox = 0.98*0.98
-transmission_efficiency_chain = 0.99
+transmission_efficiency_chain = 0.98
 
 # Motor
 motor_max_rpm = 6000
@@ -41,10 +41,10 @@ bp_end_voltage = 95
 bp_voltagedrop = 0.1/12.5 * 30/14 # voltage drop in V/A for the whole pack
 bp_cell_weight = 48.72 # Weight of the cells in the BP
 bp_cell_heat_capacity = 1300 # in J/(kg-K)
-bp_cooling_material_1_weight = 0.5 # Weight of the aluminium pieces in the BP
-bp_cooling_material_1_heat_capacity = 921.096 # in J/(kg-K)
-bp_cooling_material_2_weight = 0
-bp_cooling_material_2_heat_capacity = 921.096 # in J/(kg-K)
+bp_cooling_material_1_weight = 0.723 # Weight of the copper pieces in the BP
+bp_cooling_material_1_heat_capacity = 385 # in J/(kg-K)
+bp_cooling_material_2_weight = 0.05 # Weight of the air in the BP
+bp_cooling_material_2_heat_capacity = 1006 # in J/(kg-K)
 bp_cooling_material_3_weight = 0
 bp_cooling_material_3_heat_capacity = 921.096 # in J/(kg-K)
 bp_cooling_material_4_weight = 0
@@ -61,9 +61,9 @@ soc_amperage = 1.32
 soc_total_time = 304*60 # in seconds
 
 # Mass
-mass_motorcycle = 170
-mass_person = 80
-mass_inertia_equivalent = 25
+mass_motorcycle = 169.6
+mass_person = 73
+mass_inertia_equivalent = 7.5
 
 # Resistance
 rolling_resistance_coef = 0.02
@@ -78,7 +78,7 @@ temperature = 18 # in degrees celsius
 braking_deceleration = 1.1 #in g
 
 # laps
-circuit_laps = 1
+circuit_laps = 7
 
 
 
