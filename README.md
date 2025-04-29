@@ -34,6 +34,9 @@ BP
   - PCM Weight
   - voltagedrop (V/A)
 
+BDU
+  - Max current
+
 Motor
   - Max RPM
   - Max Torque
