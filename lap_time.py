@@ -34,6 +34,9 @@ simulation_time_step = 0.01 # time in s
 # Wheels
 wheel_diameter = 0.603 # in M
 
+# BDU
+bdu_current_limit = 200
+
 # Battery Pack
 bp_resistance = 0.004590563/7*30 # in ohms (0.068 from datasheet) should be updated from damstra tests
 bp_start_voltage = 126
@@ -61,7 +64,7 @@ soc_amperage = 1.32
 soc_total_time = 304*60 # in seconds
 
 # Mass
-mass_motorcycle = 169.6
+mass_motorcycle = 170
 mass_person = 73
 mass_inertia_equivalent = 7.5
 
@@ -215,6 +218,8 @@ current_bp_w_used = 0
 current_bp_total_heat = 0
 current_lap = 1
 
+current_lap_time = 0
+
 time = list()
 acceleration = list()
 speed = list()
@@ -247,6 +252,9 @@ bp_w_used = list()
 bp_total_heat = list()
 lap = list()
 
+lap_time = list()
+
+temp_bp_max_kw = (bp_start_voltage-bp_voltagedrop*bdu_current_limit)*bdu_current_limit
 
 # The simulation for the selected track
 while finishedCircuit == False:
@@ -293,11 +301,18 @@ while finishedCircuit == False:
         # We have to maintain speed
         current_state = 3
 
-
    
     # Calculate the acceleration with the resistance and wheel torque which is influenced by the current state
     if (current_state == 1):
         current_wheel_torque = np.interp(current_speed_kmh,char_speed_kmh,char_wheel_torque)
+
+        # Power limiter
+        temp_power = 2*(current_speed*first_gear_total_ratio/wheel_circumference)*current_wheel_torque
+        if (temp_power > temp_bp_max_kw):
+            temp_scaling_factor_state1 = (temp_bp_max_kw/temp_power)
+            current_wheel_torque = current_wheel_torque*temp_scaling_factor_state1
+        else:
+            temp_scaling_factor_state1 = 1
 
         current_force_wheel = current_wheel_torque/(0.5*wheel_diameter)
         current_force_rolling_resistance = -9.81*rolling_resistance_coef*mass_total
@@ -314,6 +329,12 @@ while finishedCircuit == False:
         current_force_drag_resistance = -0.5*current_speed**2*frontal_area*drag_coefficient*air_density
         current_force_wheel = -(current_force_rolling_resistance + current_force_drag_resistance)
         current_wheel_torque = (0.5*wheel_diameter)*current_force_wheel
+
+        # Power limiter
+        temp_power = 2*(current_speed*first_gear_total_ratio/wheel_circumference)*current_wheel_torque
+        if (temp_power > temp_bp_max_kw):
+            current_wheel_torque = current_wheel_torque*(temp_bp_max_kw/temp_power)
+
         current_acceleration = 0
     
     # update the current speed
@@ -337,12 +358,14 @@ while finishedCircuit == False:
     # Calculate the torque based on the current state
     if (current_state == 1):
         current_motor_torque = np.interp(current_speed_kmh,char_speed_kmh,char_motor_torque)
+        current_motor_torque = current_motor_torque*temp_scaling_factor_state1
 
     if (current_state == 2):
         current_motor_torque = 0
 
     if (current_state == 3):
         current_motor_torque = current_wheel_torque/current_gearing/transmission_efficiency_total
+
         
     # Calculate motor power and heat
     current_motor_output_power = 2*math.pi*current_motor_rpm/60*current_motor_torque
@@ -355,7 +378,7 @@ while finishedCircuit == False:
     
     # Calculate inverter heat
     current_inverter_heat_kw = (current_motor_input_power/inverter_efficiency-current_motor_input_power)/1000
-
+    
     # Calculate BP heat with soc
     current_bp_power_kw = current_motor_input_power/inverter_efficiency/1000
     current_bp_w_used = current_bp_w_used + current_bp_power_kw*simulation_time_step*1000
@@ -364,6 +387,7 @@ while finishedCircuit == False:
     current_bp_current = current_bp_power_kw*1000/current_bp_voltage_loaded
     current_bp_heat_kw = current_bp_current**2*bp_resistance/1000
     current_bp_total_heat += current_bp_heat_kw*simulation_time_step*1000
+    temp_bp_max_kw = (current_bp_voltage_unloaded-bp_voltagedrop*bdu_current_limit)*bdu_current_limit
 
     current_bp_temperature = round(np.interp(current_bp_total_heat,bp_total_cooling_array_total_heat,bp_total_cooling_array_temperature),2)
     # current_bp_temperature = current_bp_temperature + (current_bp_heat_kw*simulation_time_step*1000)/(bp_heat_capacity*(bp_cooled_weight))
@@ -403,6 +427,8 @@ while finishedCircuit == False:
 
     # Check if we have made a lap
     if current_lap_distance >= circuit_length:
+        lap_time.append(round(current_time-current_lap_time,2))
+        current_lap_time = current_time
         # check if we need to make for laps
         if (current_lap < circuit_laps):
             current_lap += 1
@@ -420,7 +446,7 @@ efficiency = np.divide(wheel_power,np.sum([np.multiply(bp_power_kw,1000),np.mult
 efficiency[(efficiency<= 0.01)] = float('NaN')
 
 
-
+print(lap_time)
 
 
 
@@ -466,14 +492,15 @@ figManager1.window.showMaximized()
 ##plotting the simulation results
 fig, axs = plt.subplots(2,2)
 fig.suptitle(' Race Simulation in ' + str(round(current_time,2)) + ' seconds', fontsize=30)
-axs[0,0].plot(time,speed_kmh)
-axs[0,0].plot(time,max_speed,color='grey', linestyle='dashed', linewidth=0.5)
-axs[0,0].set_title('Speed (--max speed) & Gearing(orange) vs time')
+axs[0,0].plot(time,bp_current)
+axs[0,0].set_title('BP Current (A) vs time (s)')
 axs[0,0].set_xlabel('Time (s)')
-axs[0,0].set_ylabel('Speed (km/h)')
-axs_gear1 = axs[0,0].twinx()
-axs_gear1.set_ylim([1.9,3])
-axs_gear1.plot(time,gear,color='orange', linestyle='dashed', linewidth=1)
+axs[0,0].set_ylabel('Current (A)')
+axs[0,0].set_ylim([-0.05*max(bp_current),1.05*max(bp_current)])
+axs[0,0].legend(['Current'],loc='lower right')
+# axs_gear1 = axs[0,0].twinx()
+# axs_gear1.set_ylim([1.9,3])
+# axs_gear1.plot(time,gear,color='orange', linestyle='dashed', linewidth=1)
 
 axs[0,1].plot(time,efficiency)
 axs[0,1].set_title('Efficiency vs time')
@@ -504,11 +531,12 @@ fig, axs2 = plt.subplots(2,2)
 fig.suptitle(' Race Simulation in ' + str(round(current_time,2)) + ' seconds', fontsize=30)
 axs2[0,0].plot(time,speed_kmh)
 axs2[0,0].plot(time,max_speed,color='grey', linestyle='dashed', linewidth=0.5)
-axs2[0,0].set_title('Speed (--max speed) & State(orange) vs time')
+axs2[0,0].set_title('Speed (Km/h) vs time (s)')
 axs2[0,0].set_xlabel('Time (s)')
 axs2[0,0].set_ylabel('Speed (Km/h)')
+axs2[0,0].legend(['Speed', 'Max Speed'])
 axs_state0 = axs2[0,0].twinx()
-axs_state0.plot(time,state,color='orange', linestyle='dashed', linewidth=1)
+# axs_state0.plot(time,state,color='orange', linestyle='dashed', linewidth=1)
 
 axs2[0,1].plot(time,gearbox_heat_kw)
 axs2[0,1].plot(time,chain_heat_kw)
@@ -521,13 +549,14 @@ axs2[0,1].set_xlabel('Time (s)')
 axs2[0,1].set_ylabel('Heat production (kW)')
 
 axs2[1,0].plot(time,bp_voltage_loaded)
-axs2[1,0].set_title('BP Voltage and current vs time')
+axs2[1,0].set_title('BP Voltage (V) vs time (s)')
 axs2[1,0].set_xlabel('Time (s)')
 axs2[1,0].set_ylabel('BP Voltage (V)')
-axs2[1,0].set_ylim([0.9*bp_end_voltage,1.1*bp_start_voltage])
-axs2_current0 = axs2[1,0].twinx()
-axs2_current0.plot(time,bp_current,color='orange')
-axs2_current0.set_ylabel('Current (A)')
+axs2[1,0].set_ylim([0.95*min(bp_voltage_loaded),1.05*max(bp_voltage_loaded)])
+axs2[1,0].legend(['Voltage'])
+# axs2_current0 = axs2[1,0].twinx()
+# axs2_current0.plot(time,bp_current,color='orange')
+# axs2_current0.set_ylabel('Current (A)')
 
 axs2[1,1].plot(time,bp_temperature)
 axs2[1,1].set_title('BP Temperature (max ' + str(round(max(bp_temperature),2)) +') vs time')
